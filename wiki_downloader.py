@@ -8,6 +8,7 @@ import json
 import os
 import time
 import argparse
+import re
 from urllib.parse import urlparse, urljoin
 from typing import Optional, List, Dict, Any
 
@@ -254,9 +255,52 @@ class WikiDownloader:
             'displaytitle': parse_data.get('displaytitle', title)
         }
     
+    def clean_html_content(self, html_content: str, page_title: str = '') -> str:
+        """
+        Clean HTML content by removing unwanted elements and adding page title.
+        
+        Args:
+            html_content: Raw HTML content from MediaWiki
+            page_title: Page title to add as H1 heading
+            
+        Returns:
+            Cleaned HTML content with H1 title
+        """
+        if not html_content:
+            return ''
+        
+        # Remove HTML comments
+        html_content = re.sub(r'<!--.*?-->', '', html_content, flags=re.DOTALL)
+        
+        # Remove enclosing div with class "mw-parser-output"
+        # Look for the opening div tag
+        parser_output_pattern = r'<div\s+class="mw-parser-output"[^>]*>(.*?)</div>'
+        match = re.search(parser_output_pattern, html_content, re.DOTALL)
+        
+        if match:
+            # Extract content inside the mw-parser-output div
+            html_content = match.group(1)
+        
+        # Trim leading/trailing whitespace
+        html_content = html_content.strip()
+        
+        # Add H1 with page title at the beginning
+        if page_title:
+            # Escape any HTML characters in the title
+            escaped_title = page_title.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;')
+            h1_element = f'<h1>{escaped_title}</h1>'
+            
+            # Add H1 at the beginning with a newline
+            if html_content:
+                html_content = f'{h1_element}\n{html_content}'
+            else:
+                html_content = h1_element
+        
+        return html_content
+
     def save_page(self, page_data: Dict[str, Any]) -> str:
         """
-        Save bare HTML content to file.
+        Save cleaned HTML content to file.
         
         Args:
             page_data: Dictionary containing page data
@@ -294,9 +338,14 @@ class WikiDownloader:
         filename = f"{filename}.html"
         filepath = os.path.join(self.output_dir, filename)
         
-        # Save only the bare HTML content from MediaWiki
+        # Clean the HTML content before saving
+        raw_content = page_data.get('content', '')
+        page_title = page_data.get('title', '')
+        cleaned_content = self.clean_html_content(raw_content, page_title)
+        
+        # Save the cleaned HTML content
         with open(filepath, 'w', encoding='utf-8') as f:
-            f.write(page_data.get('content', ''))
+            f.write(cleaned_content)
         
         return filepath
     

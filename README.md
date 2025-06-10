@@ -77,15 +77,17 @@ downloader.download_pages(limit=3, category="Technology")
 
 ## Output Format
 
-Pages are saved as HTML files containing the bare rendered content from MediaWiki:
+Pages are saved as HTML files containing cleaned, rendered content from MediaWiki:
 
 - Pure HTML content as rendered by MediaWiki
-- No additional wrapper HTML or styling
+- H1 heading with page title automatically added at the top
+- HTML comments automatically removed
+- MediaWiki wrapper divs (mw-parser-output) stripped away
 - Fully processed content (links, tables, images, etc.)
 - Ready to be embedded in other documents or websites
 - Preserves all MediaWiki formatting and structure
 
-Each file contains only the content portion of the wiki page, making it easy to integrate into other HTML documents or content management systems.
+Each file contains only the clean content portion of the wiki page, making it easy to integrate into other HTML documents or content management systems.
 
 ## Development
 

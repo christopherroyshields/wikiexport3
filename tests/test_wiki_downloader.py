@@ -47,12 +47,12 @@ class TestWikiDownloader:
         assert os.path.exists(new_temp_dir)
     
     def test_save_page(self):
-        """Test saving bare HTML content to file"""
+        """Test saving cleaned HTML content to file"""
         page_data = {
             'title': 'Test Page',
             'pageid': 12345,
             'url': 'https://example.com/wiki/Test_Page',
-            'content': '<p>Test content</p><div>More content</div>',
+            'content': '<div class="mw-parser-output"><p>Test content</p><div>More content</div></div>',
             'displaytitle': 'Test Page'
         }
         
@@ -61,12 +61,15 @@ class TestWikiDownloader:
         assert os.path.exists(filepath)
         assert filepath.endswith('Test Page.html')
         
-        # Verify file contains only the bare HTML content
+        # Verify file contains cleaned HTML content
         with open(filepath, 'r', encoding='utf-8') as f:
             saved_content = f.read()
         
-        # Should contain the exact content, no wrapper HTML
-        assert saved_content == '<p>Test content</p><div>More content</div>'
+        # Should contain H1 title and content without mw-parser-output wrapper
+        expected_content = '<h1>Test Page</h1>\n<p>Test content</p><div>More content</div>'
+        assert saved_content == expected_content
+        # Should NOT contain the wrapper div
+        assert 'mw-parser-output' not in saved_content
         # Should NOT contain full HTML document structure
         assert '<!DOCTYPE html>' not in saved_content
         assert '<title>' not in saved_content
@@ -265,6 +268,122 @@ class TestWikiDownloader:
             self.downloader.download_page('Redirect Page')
         
         assert "is a redirect - skipping" in str(excinfo.value)
+    
+    def test_clean_html_content_removes_comments(self):
+        """Test that HTML comments are removed"""
+        html_with_comments = '''<p>Before comment</p>
+<!-- This is a comment -->
+<p>After comment</p>
+<!-- Another comment
+spanning multiple lines -->
+<p>Final content</p>'''
+        
+        expected = '''<p>Before comment</p>
+
+<p>After comment</p>
+
+<p>Final content</p>'''
+        
+        result = self.downloader.clean_html_content(html_with_comments)
+        assert result == expected
+    
+    def test_clean_html_content_removes_mw_parser_output(self):
+        """Test that mw-parser-output div wrapper is removed"""
+        html_with_wrapper = '<div class="mw-parser-output"><p>Content inside</p><div>More content</div></div>'
+        expected = '<p>Content inside</p><div>More content</div>'
+        
+        result = self.downloader.clean_html_content(html_with_wrapper)
+        assert result == expected
+    
+    def test_clean_html_content_handles_complex_wrapper(self):
+        """Test mw-parser-output div with additional attributes"""
+        html_with_attrs = '<div class="mw-parser-output" dir="ltr" lang="en"><h1>Title</h1><p>Content</p></div>'
+        expected = '<h1>Title</h1><p>Content</p>'
+        
+        result = self.downloader.clean_html_content(html_with_attrs)
+        assert result == expected
+    
+    def test_clean_html_content_both_comments_and_wrapper(self):
+        """Test cleaning both comments and wrapper div"""
+        html_mixed = '''<div class="mw-parser-output">
+<!-- Navigation comment -->
+<p>Real content</p>
+<!-- End comment -->
+<div>More content</div>
+</div>'''
+        expected = '<p>Real content</p>\n\n<div>More content</div>'
+        
+        result = self.downloader.clean_html_content(html_mixed)
+        assert result == expected
+    
+    def test_clean_html_content_no_wrapper_div(self):
+        """Test content without mw-parser-output wrapper"""
+        html_no_wrapper = '<p>Direct content</p><!-- comment --><div>More</div>'
+        expected = '<p>Direct content</p><div>More</div>'
+        
+        result = self.downloader.clean_html_content(html_no_wrapper)
+        assert result == expected
+    
+    def test_clean_html_content_empty_input(self):
+        """Test cleaning empty or None input"""
+        assert self.downloader.clean_html_content('') == ''
+        assert self.downloader.clean_html_content(None) == ''
+    
+    def test_clean_html_content_adds_h1_title(self):
+        """Test that H1 with page title is added"""
+        html_content = '<p>Page content here</p>'
+        page_title = 'Test Page Title'
+        expected = '<h1>Test Page Title</h1>\n<p>Page content here</p>'
+        
+        result = self.downloader.clean_html_content(html_content, page_title)
+        assert result == expected
+    
+    def test_clean_html_content_escapes_html_in_title(self):
+        """Test that HTML characters in title are escaped"""
+        html_content = '<p>Content</p>'
+        page_title = 'Page <with> "quotes" & ampersands'
+        expected = '<h1>Page &lt;with&gt; &quot;quotes&quot; &amp; ampersands</h1>\n<p>Content</p>'
+        
+        result = self.downloader.clean_html_content(html_content, page_title)
+        assert result == expected
+    
+    def test_clean_html_content_title_only_no_content(self):
+        """Test with title but no content"""
+        html_content = ''
+        page_title = 'Empty Page'
+        expected = '<h1>Empty Page</h1>'
+        
+        result = self.downloader.clean_html_content(html_content, page_title)
+        assert result == expected
+    
+    def test_clean_html_content_no_title_provided(self):
+        """Test that content without title works as before"""
+        html_content = '<p>Just content</p>'
+        expected = '<p>Just content</p>'
+        
+        result = self.downloader.clean_html_content(html_content)
+        assert result == expected
+    
+    def test_clean_html_content_complete_workflow(self):
+        """Test complete workflow with wrapper, comments, and title"""
+        html_content = '''<div class="mw-parser-output">
+<!-- Start of content -->
+<p>This is the main content.</p>
+<!-- Table follows -->
+<table class="wikitable">
+  <tr><td>Data</td></tr>
+</table>
+</div>'''
+        page_title = 'Complete Test Page'
+        expected = '''<h1>Complete Test Page</h1>
+<p>This is the main content.</p>
+
+<table class="wikitable">
+  <tr><td>Data</td></tr>
+</table>'''
+        
+        result = self.downloader.clean_html_content(html_content, page_title)
+        assert result == expected
 
 
 if __name__ == '__main__':
