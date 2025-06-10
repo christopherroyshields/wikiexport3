@@ -197,6 +197,74 @@ class TestWikiDownloader:
         
         assert len(pages) == 2
         assert pages == ['Category Page 1', 'Category Page 2']
+    
+    @patch('wiki_downloader.requests.Session.get')
+    def test_is_redirect_true(self, mock_get):
+        """Test redirect detection for redirect pages"""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            'query': {
+                'pages': [
+                    {
+                        'pageid': 12345,
+                        'title': 'Redirect Page',
+                        'redirect': ''  # This indicates it's a redirect
+                    }
+                ]
+            }
+        }
+        mock_get.return_value = mock_response
+        
+        is_redirect = self.downloader.is_redirect('Redirect Page')
+        
+        assert is_redirect is True
+    
+    @patch('wiki_downloader.requests.Session.get')
+    def test_is_redirect_false(self, mock_get):
+        """Test redirect detection for regular pages"""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            'query': {
+                'pages': [
+                    {
+                        'pageid': 12345,
+                        'title': 'Regular Page'
+                        # No 'redirect' property
+                    }
+                ]
+            }
+        }
+        mock_get.return_value = mock_response
+        
+        is_redirect = self.downloader.is_redirect('Regular Page')
+        
+        assert is_redirect is False
+    
+    @patch('wiki_downloader.requests.Session.get')
+    def test_download_page_skips_redirect(self, mock_get):
+        """Test that download_page raises exception for redirect pages"""
+        # Mock the redirect check
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            'query': {
+                'pages': [
+                    {
+                        'pageid': 12345,
+                        'title': 'Redirect Page',
+                        'redirect': ''
+                    }
+                ]
+            }
+        }
+        mock_get.return_value = mock_response
+        
+        with pytest.raises(Exception) as excinfo:
+            self.downloader.download_page('Redirect Page')
+        
+        assert "is a redirect - skipping" in str(excinfo.value)
 
 
 if __name__ == '__main__':

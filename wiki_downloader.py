@@ -147,6 +147,42 @@ class WikiDownloader:
         
         return pages[:limit]
     
+    def is_redirect(self, title: str) -> bool:
+        """
+        Check if a page is a redirect.
+        
+        Args:
+            title: Page title to check
+            
+        Returns:
+            True if page is a redirect, False otherwise
+        """
+        params = {
+            'action': 'query',
+            'titles': title,
+            'prop': 'info',
+            'format': 'json',
+            'formatversion': '2'
+        }
+        
+        response = self.session.get(self.api_url, params=params)
+        
+        if response.status_code != 200:
+            return False  # Assume not redirect on error
+        
+        try:
+            data = response.json()
+        except json.JSONDecodeError:
+            return False  # Assume not redirect on parse error
+        
+        pages = data.get('query', {}).get('pages', [])
+        if pages:
+            page = pages[0]
+            # Check if page has redirect property
+            return 'redirect' in page
+        
+        return False
+
     def download_page(self, title: str) -> Dict[str, Any]:
         """
         Download a single page by title.
@@ -156,8 +192,15 @@ class WikiDownloader:
             
         Returns:
             Dictionary containing page data with HTML content
+            
+        Raises:
+            Exception: If page is a redirect or cannot be downloaded
         """
-        # First get the parsed HTML content
+        # First check if this is a redirect
+        if self.is_redirect(title):
+            raise Exception(f"Page '{title}' is a redirect - skipping")
+        
+        # Get the parsed HTML content
         params = {
             'action': 'parse',
             'page': title,
@@ -279,6 +322,7 @@ class WikiDownloader:
         
         downloaded = 0
         failed = 0
+        redirects_skipped = 0
         
         for i, title in enumerate(pages, 1):
             try:
@@ -289,11 +333,16 @@ class WikiDownloader:
                 downloaded += 1
                 time.sleep(0.5)  # Rate limiting
             except Exception as e:
-                print(f"  Error: {e}")
-                failed += 1
+                if "is a redirect" in str(e):
+                    print(f"  Skipped: {e}")
+                    redirects_skipped += 1
+                else:
+                    print(f"  Error: {e}")
+                    failed += 1
         
         print(f"\nDownload complete!")
         print(f"Successfully downloaded: {downloaded} pages")
+        print(f"Redirects skipped: {redirects_skipped} pages")
         print(f"Failed: {failed} pages")
 
 

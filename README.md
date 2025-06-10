@@ -10,6 +10,7 @@ A Python tool for downloading pages from MediaWiki instances with support for pa
 - Rate limiting to be respectful to servers
 - HTML output format with clean styling
 - Support for custom wiki installations
+- Automatic redirect detection and exclusion
 
 ## Installation
 
