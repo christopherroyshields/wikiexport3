@@ -47,26 +47,29 @@ class TestWikiDownloader:
         assert os.path.exists(new_temp_dir)
     
     def test_save_page(self):
-        """Test saving page data to file"""
+        """Test saving bare HTML content to file"""
         page_data = {
             'title': 'Test Page',
             'pageid': 12345,
             'url': 'https://example.com/wiki/Test_Page',
-            'content': 'Test content',
-            'timestamp': '2023-01-01T12:00:00Z'
+            'content': '<p>Test content</p><div>More content</div>',
+            'displaytitle': 'Test Page'
         }
         
         filepath = self.downloader.save_page(page_data)
         
         assert os.path.exists(filepath)
-        assert filepath.endswith('Test Page.json')
+        assert filepath.endswith('Test Page.html')
         
-        # Verify file content
-        import json
+        # Verify file contains only the bare HTML content
         with open(filepath, 'r', encoding='utf-8') as f:
-            saved_data = json.load(f)
+            saved_content = f.read()
         
-        assert saved_data == page_data
+        # Should contain the exact content, no wrapper HTML
+        assert saved_content == '<p>Test content</p><div>More content</div>'
+        # Should NOT contain full HTML document structure
+        assert '<!DOCTYPE html>' not in saved_content
+        assert '<title>' not in saved_content
     
     def test_save_page_sanitizes_filename(self):
         """Test that page titles with special characters are sanitized"""
@@ -82,7 +85,7 @@ class TestWikiDownloader:
         
         assert os.path.exists(filepath)
         # All special characters should be replaced with underscores
-        assert 'Test_Page_With_Special_Characters_______.json' in filepath
+        assert 'Test_Page_With_Special_Characters_______.html' in filepath
     
     def test_save_page_handles_empty_title(self):
         """Test that empty or whitespace-only titles are handled"""
@@ -97,7 +100,7 @@ class TestWikiDownloader:
         filepath = self.downloader.save_page(page_data)
         
         assert os.path.exists(filepath)
-        assert 'page_12345.json' in filepath
+        assert 'page_12345.html' in filepath
     
     def test_save_page_handles_long_filename(self):
         """Test that very long filenames are truncated"""
@@ -115,7 +118,7 @@ class TestWikiDownloader:
         assert os.path.exists(filepath)
         filename = os.path.basename(filepath)
         # Should be truncated to reasonable length
-        assert len(filename) <= 205  # 200 + ".json"
+        assert len(filename) <= 205  # 200 + ".html"
     
     def test_save_page_handles_duplicate_filenames(self):
         """Test that duplicate filenames get unique numbers"""
@@ -137,8 +140,8 @@ class TestWikiDownloader:
         assert os.path.exists(filepath1)
         assert os.path.exists(filepath2)
         assert filepath1 != filepath2
-        assert 'Duplicate Page.json' in filepath1
-        assert 'Duplicate Page_1.json' in filepath2
+        assert 'Duplicate Page.html' in filepath1
+        assert 'Duplicate Page_1.html' in filepath2
     
     @patch('wiki_downloader.requests.Session.get')
     def test_get_all_pages_success(self, mock_get):

@@ -155,15 +155,13 @@ class WikiDownloader:
             title: Page title
             
         Returns:
-            Dictionary containing page data
+            Dictionary containing page data with HTML content
         """
+        # First get the parsed HTML content
         params = {
-            'action': 'query',
-            'prop': 'revisions|info',
-            'titles': title,
-            'rvprop': 'content|timestamp',
-            'rvslots': 'main',
-            'inprop': 'url',
+            'action': 'parse',
+            'page': title,
+            'prop': 'text|displaytitle',
             'format': 'json',
             'formatversion': '2'
         }
@@ -186,25 +184,36 @@ class WikiDownloader:
         if 'error' in data:
             raise Exception(f"API error: {data['error']['info']}")
         
-        pages = data.get('query', {}).get('pages', [])
-        if not pages:
-            raise Exception(f"Page '{title}' not found")
+        parse_data = data.get('parse', {})
+        if not parse_data:
+            raise Exception(f"Page '{title}' not found or could not be parsed")
         
-        page = pages[0]
-        if 'missing' in page:
-            raise Exception(f"Page '{title}' does not exist")
+        # Get additional page info
+        info_params = {
+            'action': 'query',
+            'prop': 'info',
+            'titles': title,
+            'inprop': 'url',
+            'format': 'json',
+            'formatversion': '2'
+        }
+        
+        info_response = self.session.get(self.api_url, params=info_params)
+        info_data = info_response.json()
+        
+        page_info = info_data.get('query', {}).get('pages', [{}])[0]
         
         return {
-            'title': page['title'],
-            'pageid': page['pageid'],
-            'url': page.get('fullurl', ''),
-            'content': page['revisions'][0]['slots']['main']['content'],
-            'timestamp': page['revisions'][0]['timestamp']
+            'title': parse_data.get('title', title),
+            'pageid': parse_data.get('pageid', 0),
+            'url': page_info.get('fullurl', ''),
+            'content': parse_data.get('text', ''),
+            'displaytitle': parse_data.get('displaytitle', title)
         }
     
     def save_page(self, page_data: Dict[str, Any]) -> str:
         """
-        Save page data to file.
+        Save bare HTML content to file.
         
         Args:
             page_data: Dictionary containing page data
@@ -228,22 +237,23 @@ class WikiDownloader:
             filename = f"page_{page_data.get('pageid', 'unknown')}"
         
         # Limit filename length (most filesystems support 255 chars)
-        max_length = 200  # Leave room for .json extension and potential numbering
+        max_length = 200  # Leave room for .html extension and potential numbering
         if len(filename) > max_length:
             filename = filename[:max_length].rstrip()
         
         # Ensure unique filename if file already exists
         base_filename = filename
         counter = 1
-        while os.path.exists(os.path.join(self.output_dir, f"{filename}.json")):
+        while os.path.exists(os.path.join(self.output_dir, f"{filename}.html")):
             filename = f"{base_filename}_{counter}"
             counter += 1
         
-        filename = f"{filename}.json"
+        filename = f"{filename}.html"
         filepath = os.path.join(self.output_dir, filename)
         
+        # Save only the bare HTML content from MediaWiki
         with open(filepath, 'w', encoding='utf-8') as f:
-            json.dump(page_data, f, ensure_ascii=False, indent=2)
+            f.write(page_data.get('content', ''))
         
         return filepath
     

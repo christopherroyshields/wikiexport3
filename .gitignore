@@ -163,4 +163,4 @@ cython_debug/
 wiki_pages/
 downloads/
 archlinux_pages/
-*.json
+*.html

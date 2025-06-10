@@ -8,7 +8,7 @@ A Python tool for downloading pages from MediaWiki instances with support for pa
 - Filter pages by category
 - Configurable page limits
 - Rate limiting to be respectful to servers
-- JSON output format with metadata
+- HTML output format with clean styling
 - Support for custom wiki installations
 
 ## Installation
@@ -76,17 +76,15 @@ downloader.download_pages(limit=3, category="Technology")
 
 ## Output Format
 
-Pages are saved as JSON files with the following structure:
+Pages are saved as HTML files containing the bare rendered content from MediaWiki:
 
-```json
-{
-  "title": "Page Title",
-  "pageid": 12345,
-  "url": "https://example.com/wiki/Page_Title",
-  "content": "Page wikitext content...",
-  "timestamp": "2023-01-01T12:00:00Z"
-}
-```
+- Pure HTML content as rendered by MediaWiki
+- No additional wrapper HTML or styling
+- Fully processed content (links, tables, images, etc.)
+- Ready to be embedded in other documents or websites
+- Preserves all MediaWiki formatting and structure
+
+Each file contains only the content portion of the wiki page, making it easy to integrate into other HTML documents or content management systems.
 
 ## Development
 
