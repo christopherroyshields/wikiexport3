@@ -298,15 +298,15 @@ class WikiDownloader:
         
         return html_content
 
-    def save_page(self, page_data: Dict[str, Any]) -> str:
+    def get_filepath(self, page_data: Dict[str, Any]) -> str:
         """
-        Save cleaned HTML content to file.
+        Generate the filepath for a page without saving it.
         
         Args:
             page_data: Dictionary containing page data
             
         Returns:
-            Path to saved file
+            Path where the file would be saved
         """
         # Sanitize filename - remove/replace problematic characters
         filename = page_data['title']
@@ -331,6 +331,20 @@ class WikiDownloader:
         filename = f"{filename}.html"
         filepath = os.path.join(self.output_dir, filename)
         
+        return filepath
+
+    def save_page(self, page_data: Dict[str, Any]) -> str:
+        """
+        Save cleaned HTML content to file.
+        
+        Args:
+            page_data: Dictionary containing page data
+            
+        Returns:
+            Path to saved file
+        """
+        filepath = self.get_filepath(page_data)
+        
         # Clean the HTML content before saving
         raw_content = page_data.get('content', '')
         page_title = page_data.get('title', '')
@@ -342,33 +356,55 @@ class WikiDownloader:
         
         return filepath
     
-    def download_pages(self, limit: int, category: Optional[str] = None) -> None:
+    def download_pages(self, limit: int, category: Optional[str] = None, force: bool = False) -> None:
         """
         Download multiple pages with optional category filter.
         
         Args:
             limit: Maximum number of pages to download
             category: Optional category to filter pages
+            force: If True, redownload files even if they already exist
         """
         print(f"Starting download from {self.wiki_url}")
         print(f"Output directory: {self.output_dir}")
         
-        if category:
-            print(f"Fetching pages from category: {category}")
-            pages = self.get_pages_in_category(category, limit)
-        else:
-            print(f"Fetching all pages (limit: {limit})")
-            pages = self.get_all_pages(limit)
-        
-        print(f"Found {len(pages)} pages to download")
-        
         downloaded = 0
         failed = 0
         redirects_skipped = 0
+        skipped_existing = 0
+        page_index = 0
         
-        for i, title in enumerate(pages, 1):
+        # Get initial batch of pages
+        if category:
+            print(f"Fetching pages from category: {category}")
+            pages = self.get_pages_in_category(category, limit * 3)  # Get extra to account for redirects
+        else:
+            print(f"Fetching all pages")
+            pages = self.get_all_pages(limit * 3)  # Get extra to account for redirects
+        
+        print(f"Found {len(pages)} candidate pages")
+        if not force:
+            print("Skipping files that already exist (use --force to redownload)")
+        
+        while downloaded < limit and page_index < len(pages):
+            title = pages[page_index]
+            page_index += 1
+            
             try:
-                print(f"[{i}/{len(pages)}] Downloading: {title}")
+                # Check if file already exists (unless force is True)
+                if not force:
+                    # We need to get basic page data to determine the filepath
+                    temp_page_data = {'title': title, 'pageid': 0}
+                    potential_filepath = self.get_filepath(temp_page_data)
+                    
+                    if os.path.exists(potential_filepath):
+                        print(f"[{downloaded + 1}/{limit}] Skipping existing: {title}")
+                        print(f"  File exists: {potential_filepath}")
+                        skipped_existing += 1
+                        downloaded += 1  # Count as "downloaded" since we have the file
+                        continue
+                
+                print(f"[{downloaded + 1}/{limit}] Downloading: {title}")
                 page_data = self.download_page(title)
                 filepath = self.save_page(page_data)
                 print(f"  Saved to: {filepath}")
@@ -383,7 +419,8 @@ class WikiDownloader:
                     failed += 1
         
         print(f"\nDownload complete!")
-        print(f"Successfully downloaded: {downloaded} pages")
+        print(f"Successfully downloaded: {downloaded - skipped_existing} pages")
+        print(f"Skipped existing files: {skipped_existing} pages")
         print(f"Redirects skipped: {redirects_skipped} pages")
         print(f"Failed: {failed} pages")
 
@@ -411,11 +448,16 @@ def main():
         default='wiki_pages',
         help='Output directory for downloaded pages (default: wiki_pages)'
     )
+    parser.add_argument(
+        '-f', '--force',
+        action='store_true',
+        help='Force redownload of files even if they already exist'
+    )
     
     args = parser.parse_args()
     
     downloader = WikiDownloader(args.wiki_url, args.output)
-    downloader.download_pages(args.limit, args.category)
+    downloader.download_pages(args.limit, args.category, args.force)
 
 
 if __name__ == '__main__':
