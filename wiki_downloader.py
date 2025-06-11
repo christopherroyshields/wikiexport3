@@ -198,8 +198,8 @@ class WikiDownloader:
             Exception: If page is a redirect or cannot be downloaded
         """
         # First check if this is a redirect
-        if self.is_redirect(title):
-            raise Exception(f"Page '{title}' is a redirect - skipping")
+        # if self.is_redirect(title):
+        #     raise Exception(f"Page '{title}' is a redirect - skipping")
         
         # Get the parsed HTML content
         params = {
@@ -295,18 +295,19 @@ class WikiDownloader:
         
         return html_content
 
-    def get_filepath(self, page_data: Dict[str, Any]) -> str:
+    def get_filepath(self, title: str, fileCount: int, is_redirect: bool = False) -> str:
         """
         Generate the filepath for a page without saving it.
         
         Args:
             page_data: Dictionary containing page data
+            is_redirect: Whether this is a redirect page
             
         Returns:
             Path where the file would be saved
         """
         # Sanitize filename - remove/replace problematic characters
-        filename = page_data['title']
+        filename = title
         
         # Replace problematic characters with underscores
         invalid_chars = ['/', '\\', ':', '*', '?', '"', '<', '>', '|']
@@ -318,30 +319,33 @@ class WikiDownloader:
         
         # Handle empty filename
         if not filename:
-            filename = f"page_{page_data.get('pageid', 'unknown')}"
+            filename = f"page_{fileCount}"
         
         # Limit filename length (most filesystems support 255 chars)
         max_length = 200  # Leave room for .html extension and potential numbering
         if len(filename) > max_length:
             filename = filename[:max_length].rstrip()
         
+        # Add _REDIRECT suffix for redirect pages
+        if is_redirect:
+            filename = f"{filename}_REDIRECT"
+        
         filename = f"{filename}.html"
         filepath = os.path.join(self.output_dir, filename)
         
         return filepath
 
-    def save_page(self, page_data: Dict[str, Any]) -> str:
+    def save_page(self, filepath: str, page_data: Dict[str, Any], fileCount: int, is_redirect: bool = False) -> str:
         """
         Save cleaned HTML content to file.
         
         Args:
             page_data: Dictionary containing page data
+            is_redirect: Whether this is a redirect page
             
         Returns:
             Path to saved file
         """
-        filepath = self.get_filepath(page_data)
-        
         # Clean the HTML content before saving
         raw_content = page_data.get('content', '')
         page_title = page_data.get('title', '')
@@ -388,23 +392,22 @@ class WikiDownloader:
             page_index += 1
             
             try:
+                # Check if it's a redirect first
+                is_redirect_page = self.is_redirect(title)
+                filepath = self.get_filepath(title, page_index, is_redirect_page)
+             
                 # Check if file already exists (unless force is True)
                 if not force:
-                    # We need to get basic page data to determine the filepath
-                    temp_page_data = {'title': title, 'pageid': 0}
-                    potential_filepath = self.get_filepath(temp_page_data)
-                    
-                    if os.path.exists(potential_filepath):
-                        print(f"[{downloaded + 1}/{limit}] Skipping existing: {title}")
-                        print(f"  File exists: {potential_filepath}")
+                    if os.path.exists(filepath):
+                        print(f"[{downloaded + 1}/{limit}] Skipping existing: {filepath}")
+                        print(f"  File exists: {filepath}")
                         skipped_existing += 1
                         downloaded += 1  # Count as "downloaded" since we have the file
                         continue
                 
                 print(f"[{downloaded + 1}/{limit}] Downloading: {title}")
                 
-                # Check if it's a redirect first
-                if self.is_redirect(title):
+                if is_redirect_page:
                     print(f"  Redirect detected - saving empty file")
                     # Create empty page data for redirect
                     redirect_page_data = {
@@ -414,13 +417,13 @@ class WikiDownloader:
                         'content': '',
                         'displaytitle': title
                     }
-                    filepath = self.save_page(redirect_page_data)
+                    filepath = self.save_page(filepath, redirect_page_data, page_index, is_redirect_page)
                     print(f"  Saved empty redirect: {filepath}")
                     redirects_skipped += 1
                 else:
                     # Download normal page
                     page_data = self.download_page(title)
-                    filepath = self.save_page(page_data)
+                    filepath = self.save_page(filepath, page_data, page_index, is_redirect_page)
                     print(f"  Saved to: {filepath}")
                 
                 downloaded += 1

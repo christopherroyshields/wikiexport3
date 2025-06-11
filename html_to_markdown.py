@@ -7,6 +7,7 @@ Reads HTML files and converts them to Markdown format.
 import os
 import argparse
 import glob
+import re
 from pathlib import Path
 from typing import List, Optional
 import markdownify
@@ -70,7 +71,6 @@ class HTMLToMarkdownConverter:
         markdown_content = '\n'.join(cleaned_lines)
         
         # Replace multiple consecutive newlines with maximum of 2
-        import re
         markdown_content = re.sub(r'\n{3,}', '\n\n', markdown_content)
         
         return markdown_content.strip()
@@ -147,10 +147,34 @@ class HTMLToMarkdownConverter:
         
         converted = 0
         failed = 0
+        skipped = 0
         
         for i, html_file in enumerate(html_files, 1):
             filename = os.path.basename(html_file)
             print(f"[{i}/{len(html_files)}] Converting: {filename}")
+            
+            # Check if file is empty before attempting conversion
+            try:
+                with open(html_file, 'r', encoding='utf-8') as f:
+                    html_content = f.read()
+                
+                if not html_content.strip():
+                    print(f"  Skipping empty file")
+                    skipped += 1
+                    continue
+                
+                # Check if file only contains an H1 tag
+                cleaned_content = re.sub(r'\s+', ' ', html_content.strip())
+                h1_only_pattern = r'^<h1[^>]*>.*?</h1>$'
+                if re.match(h1_only_pattern, cleaned_content, re.IGNORECASE | re.DOTALL):
+                    print(f"  Skipping file with only H1 tag")
+                    skipped += 1
+                    continue
+                    
+            except Exception as e:
+                print(f"  Error reading file: {e}")
+                failed += 1
+                continue
             
             output_file = self.convert_file(html_file)
             
@@ -163,6 +187,7 @@ class HTMLToMarkdownConverter:
         
         print(f"\nConversion complete!")
         print(f"Successfully converted: {converted} files")
+        print(f"Skipped empty files: {skipped} files")
         print(f"Failed: {failed} files")
 
 
@@ -193,6 +218,26 @@ def main():
         # Convert single file
         if not os.path.exists(args.file):
             print(f"Error: File {args.file} does not exist")
+            return
+        
+        # Check if file is empty
+        try:
+            with open(args.file, 'r', encoding='utf-8') as f:
+                html_content = f.read()
+            
+            if not html_content.strip():
+                print(f"File {args.file} is empty - skipping conversion")
+                return
+                
+            # Check if file only contains an H1 tag
+            cleaned_content = re.sub(r'\s+', ' ', html_content.strip())
+            h1_only_pattern = r'^<h1[^>]*>.*?</h1>$'
+            if re.match(h1_only_pattern, cleaned_content, re.IGNORECASE | re.DOTALL):
+                print(f"File {args.file} only contains an H1 tag - skipping conversion")
+                return
+                
+        except Exception as e:
+            print(f"Error reading file {args.file}: {e}")
             return
         
         print(f"Converting single file: {args.file}")
