@@ -284,17 +284,14 @@ class WikiDownloader:
         # Trim leading/trailing whitespace
         html_content = html_content.strip()
         
-        # Add H1 with page title at the beginning
-        if page_title:
+        # Add H1 with page title at the beginning only if there's content
+        if page_title and html_content:
             # Escape any HTML characters in the title
             escaped_title = page_title.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;')
             h1_element = f'<h1>{escaped_title}</h1>'
             
             # Add H1 at the beginning with a newline
-            if html_content:
-                html_content = f'{h1_element}\n{html_content}'
-            else:
-                html_content = h1_element
+            html_content = f'{h1_element}\n{html_content}'
         
         return html_content
 
@@ -405,18 +402,32 @@ class WikiDownloader:
                         continue
                 
                 print(f"[{downloaded + 1}/{limit}] Downloading: {title}")
-                page_data = self.download_page(title)
-                filepath = self.save_page(page_data)
-                print(f"  Saved to: {filepath}")
-                downloaded += 1
-                time.sleep(0.5)  # Rate limiting
-            except Exception as e:
-                if "is a redirect" in str(e):
-                    print(f"  Skipped: {e}")
+                
+                # Check if it's a redirect first
+                if self.is_redirect(title):
+                    print(f"  Redirect detected - saving empty file")
+                    # Create empty page data for redirect
+                    redirect_page_data = {
+                        'title': title,
+                        'pageid': 0,
+                        'url': '',
+                        'content': '',
+                        'displaytitle': title
+                    }
+                    filepath = self.save_page(redirect_page_data)
+                    print(f"  Saved empty redirect: {filepath}")
                     redirects_skipped += 1
                 else:
-                    print(f"  Error: {e}")
-                    failed += 1
+                    # Download normal page
+                    page_data = self.download_page(title)
+                    filepath = self.save_page(page_data)
+                    print(f"  Saved to: {filepath}")
+                
+                downloaded += 1
+                time.sleep(0.1)  # Rate limiting
+            except Exception as e:
+                print(f"  Error: {e}")
+                failed += 1
         
         print(f"\nDownload complete!")
         print(f"Successfully downloaded: {downloaded - skipped_existing} pages")
