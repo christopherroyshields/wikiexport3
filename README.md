@@ -54,9 +54,6 @@ python wiki_downloader.py https://en.wikipedia.org --limit 10
 # Download pages from a specific category
 python wiki_downloader.py https://en.wikipedia.org --limit 5 --category "Python (programming language)"
 
-# Download from a custom wiki
-python wiki_downloader.py https://brulescorp.com/brwiki2 --limit 3 --output my_pages
-
 # Get help
 python wiki_downloader.py --help
 ```
