@@ -328,13 +328,6 @@ class WikiDownloader:
         if len(filename) > max_length:
             filename = filename[:max_length].rstrip()
         
-        # Ensure unique filename if file already exists
-        base_filename = filename
-        counter = 1
-        while os.path.exists(os.path.join(self.output_dir, f"{filename}.html")):
-            filename = f"{base_filename}_{counter}"
-            counter += 1
-        
         filename = f"{filename}.html"
         filepath = os.path.join(self.output_dir, filename)
         

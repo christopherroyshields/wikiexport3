@@ -54,7 +54,7 @@ class HTMLToMarkdownConverter:
             html_content,
             heading_style="ATX",  # Use # for headings instead of underlines
             bullets="-",          # Use - for bullet points
-            strip=['script', 'style']  # Remove script and style tags
+            strip=['script', 'style', 'a']  # Remove script and style tags
         )
         
         # Clean up extra whitespace
@@ -92,10 +92,10 @@ class HTMLToMarkdownConverter:
         markdown_filename = f"{base_name}.md"
         
         # Ensure unique filename if file already exists
-        counter = 1
-        while os.path.exists(os.path.join(self.output_dir, markdown_filename)):
-            markdown_filename = f"{base_name}_{counter}.md"
-            counter += 1
+        # counter = 1
+        # while os.path.exists(os.path.join(self.output_dir, markdown_filename)):
+        #     markdown_filename = f"{base_name}_{counter}.md"
+        #     counter += 1
         
         return os.path.join(self.output_dir, markdown_filename)
     
